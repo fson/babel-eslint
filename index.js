@@ -1,5 +1,4 @@
 var babylonToEspree = require("./babylon-to-espree");
-var assign         = require("lodash.assign");
 var Module         = require("module");
 var path           = require("path");
 var parse          = require("babylon").parse;
@@ -53,7 +52,7 @@ function monkeypatch() {
   // monkeypatch estraverse
   estraverse = estraverseRelative.require("estraverse");
   estraverses.push(estraverse);
-  assign(estraverse.VisitorKeys, t.VISITOR_KEYS);
+  Object.assign(estraverse.VisitorKeys, t.VISITOR_KEYS);
 
   estraverses.forEach(function (estraverse) {
     estraverse.VisitorKeys.MethodDefinition.push("decorators");

@@ -14,8 +14,7 @@
   "dependencies": {
     "babel-traverse": "^6.0.20",
     "babel-types": "^6.0.19",
-    "babylon": "^6.0.18",
-    "lodash.assign": "^4.0.0"
+    "babylon": "^6.0.18"
   },
   "scripts": {
     "bootstrap": "git submodule update --init && cd eslint && npm install",
