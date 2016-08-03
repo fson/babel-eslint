@@ -1,6 +1,5 @@
 var babylonToEspree = require("./babylon-to-espree");
 var assign         = require("lodash.assign");
-var pick           = require("lodash.pickby");
 var Module         = require("module");
 var path           = require("path");
 var parse          = require("babylon").parse;
@@ -109,93 +108,6 @@ function monkeypatch() {
     }
   }
 
-  // iterate through part of t.VISITOR_KEYS
-  var visitorKeysMap = pick(t.VISITOR_KEYS, function(k) {
-    return t.FLIPPED_ALIAS_KEYS.Flow.concat([
-      "ArrayPattern",
-      "ClassDeclaration",
-      "ClassExpression",
-      "FunctionDeclaration",
-      "FunctionExpression",
-      "Identifier",
-      "ObjectPattern",
-      "RestElement"
-    ]).indexOf(k) === -1;
-  });
-
-  var propertyTypes = {
-    // loops
-    callProperties: { type: "loop", values: ["value"] },
-    indexers: { type: "loop", values: ["key", "value"] },
-    properties: { type: "loop", values: ["value"] },
-    types: { type: "loop" },
-    params: { type: "loop" },
-    // single property
-    argument: { type: "single" },
-    elementType: { type: "single" },
-    qualification: { type: "single" },
-    rest: { type: "single" },
-    returnType: { type: "single" },
-    // others
-    typeAnnotation: { type: "typeAnnotation" },
-    typeParameters: { type: "typeParameters" },
-    id: { type: "id" }
-  };
-
-  function visitTypeAnnotation(node) {
-    // get property to check (params, id, etc...)
-    var visitorValues = visitorKeysMap[node.type];
-    if (!visitorValues) {
-      return;
-    }
-
-    // can have multiple properties
-    for (var i = 0; i < visitorValues.length; i++) {
-      var visitorValue = visitorValues[i];
-      var propertyType = propertyTypes[visitorValue];
-      var nodeProperty = node[visitorValue];
-      // check if property or type is defined
-      if (propertyType == null || nodeProperty == null) {
-        continue;
-      }
-      if (propertyType.type === "loop") {
-        for (var j = 0; j < nodeProperty.length; j++) {
-          if (Array.isArray(propertyType.values)) {
-            for (var k = 0; k < propertyType.values.length; k++) {
-              checkIdentifierOrVisit.call(this, nodeProperty[j][propertyType.values[k]]);
-            }
-          } else {
-            checkIdentifierOrVisit.call(this, nodeProperty[j]);
-          }
-        }
-      } else if (propertyType.type === "single") {
-        checkIdentifierOrVisit.call(this, nodeProperty);
-      } else if (propertyType.type === "typeAnnotation") {
-        visitTypeAnnotation.call(this, node.typeAnnotation);
-      } else if (propertyType.type === "typeParameters") {
-        for (var l = 0; l < node.typeParameters.params.length; l++) {
-          checkIdentifierOrVisit.call(this, node.typeParameters.params[l]);
-        }
-      } else if (propertyType.type === "id") {
-        if (node.id.type === "Identifier") {
-          checkIdentifierOrVisit.call(this, node.id);
-        } else {
-          visitTypeAnnotation.call(this, node.id);
-        }
-      }
-    }
-  }
-
-  function checkIdentifierOrVisit(node) {
-    if (node.typeAnnotation) {
-      visitTypeAnnotation.call(this, node.typeAnnotation);
-    } else if (node.type === "Identifier") {
-      this.visit(node);
-    } else {
-      visitTypeAnnotation.call(this, node);
-    }
-  }
-
   function nestTypeParamScope(manager, node) {
     var parentScope = manager.__currentScope;
     var scope = new escope.Scope(manager, "type-parameters", parentScope, node, false);
@@ -218,17 +130,6 @@ function monkeypatch() {
     if (node.typeParameters) {
       typeParamScope = nestTypeParamScope(this.scopeManager, node);
     }
-    // visit flow type: ClassImplements
-    if (node.implements) {
-      for (var i = 0; i < node.implements.length; i++) {
-        checkIdentifierOrVisit.call(this, node.implements[i]);
-      }
-    }
-    if (node.superTypeParameters) {
-      for (var k = 0; k < node.superTypeParameters.params.length; k++) {
-        checkIdentifierOrVisit.call(this, node.superTypeParameters.params[k]);
-      }
-    }
     visitClass.call(this, node);
     if (typeParamScope) {
       this.close(node);
@@ -238,18 +139,12 @@ function monkeypatch() {
   // visit decorators that are in: Property / MethodDefinition
   var visitProperty = referencer.prototype.visitProperty;
   referencer.prototype.visitProperty = function(node) {
-    if (node.value && node.value.type === "TypeCastExpression") {
-      visitTypeAnnotation.call(this, node.value);
-    }
     visitDecorators.call(this, node);
     visitProperty.call(this, node);
   };
 
   // visit ClassProperty as a Property.
   referencer.prototype.ClassProperty = function(node) {
-    if (node.typeAnnotation) {
-      visitTypeAnnotation.call(this, node.typeAnnotation);
-    }
     this.visitProperty(node);
   };
 
@@ -259,22 +154,6 @@ function monkeypatch() {
     var typeParamScope;
     if (node.typeParameters) {
       typeParamScope = nestTypeParamScope(this.scopeManager, node);
-    }
-    if (node.returnType) {
-      checkIdentifierOrVisit.call(this, node.returnType);
-    }
-    // only visit if function parameters have types
-    if (node.params) {
-      for (var i = 0; i < node.params.length; i++) {
-        var param = node.params[i];
-        if (param.typeAnnotation) {
-          checkIdentifierOrVisit.call(this, param);
-        } else if (t.isAssignmentPattern(param)) {
-          if (param.left.typeAnnotation) {
-            checkIdentifierOrVisit.call(this, param.left);
-          }
-        }
-      }
     }
     // set ArrayPattern/ObjectPattern visitor keys back to their original. otherwise
     // escope will traverse into them and include the identifiers within as declarations
@@ -291,21 +170,6 @@ function monkeypatch() {
     if (typeParamScope) {
       this.close(node);
     }
-  };
-
-  // visit flow type in VariableDeclaration
-  var variableDeclaration = referencer.prototype.VariableDeclaration;
-  referencer.prototype.VariableDeclaration = function(node) {
-    if (node.declarations) {
-      for (var i = 0; i < node.declarations.length; i++) {
-        var id = node.declarations[i].id;
-        var typeAnnotation = id.typeAnnotation;
-        if (typeAnnotation) {
-          checkIdentifierOrVisit.call(this, typeAnnotation);
-        }
-      }
-    }
-    variableDeclaration.call(this, node);
   };
 
   function createScopeVariable (node, name) {
@@ -326,9 +190,6 @@ function monkeypatch() {
     var typeParamScope;
     if (node.typeParameters) {
       typeParamScope = nestTypeParamScope(this.scopeManager, node);
-    }
-    if (node.right) {
-      visitTypeAnnotation.call(this, node.right);
     }
     if (typeParamScope) {
       this.close(node);
