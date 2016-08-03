@@ -80,20 +80,10 @@ function monkeypatch() {
   } catch (err) {
     throw new ReferenceError("couldn't resolve escope/referencer");
   }
-  var referencerMod = createModule(referencerLoc);
   var referencer = require(referencerLoc);
   if (referencer.__esModule) {
     referencer = referencer.default;
   }
-
-  // reference Definition
-  var definitionLoc;
-  try {
-    definitionLoc = Module._resolveFilename("./definition", referencerMod);
-  } catch (err) {
-    throw new ReferenceError("couldn't resolve escope/definition");
-  }
-  var Definition = require(definitionLoc).Definition;
 
   // if there are decorators, then visit each
   function visitDecorators(node) {
@@ -107,32 +97,11 @@ function monkeypatch() {
     }
   }
 
-  function nestTypeParamScope(manager, node) {
-    var parentScope = manager.__currentScope;
-    var scope = new escope.Scope(manager, "type-parameters", parentScope, node, false);
-    manager.__nestScope(scope);
-    for (var j = 0; j < node.typeParameters.params.length; j++) {
-      var name = node.typeParameters.params[j];
-      scope.__define(name, new Definition("TypeParameter", name, name));
-    }
-    scope.__define = function() {
-      return parentScope.__define.apply(parentScope, arguments);
-    };
-    return scope;
-  }
-
   // visit decorators that are in: ClassDeclaration / ClassExpression
   var visitClass = referencer.prototype.visitClass;
   referencer.prototype.visitClass = function(node) {
     visitDecorators.call(this, node);
-    var typeParamScope;
-    if (node.typeParameters) {
-      typeParamScope = nestTypeParamScope(this.scopeManager, node);
-    }
     visitClass.call(this, node);
-    if (typeParamScope) {
-      this.close(node);
-    }
   };
 
   // visit decorators that are in: Property / MethodDefinition
@@ -147,13 +116,8 @@ function monkeypatch() {
     this.visitProperty(node);
   };
 
-  // visit flow type in FunctionDeclaration, FunctionExpression, ArrowFunctionExpression
   var visitFunction = referencer.prototype.visitFunction;
   referencer.prototype.visitFunction = function(node) {
-    var typeParamScope;
-    if (node.typeParameters) {
-      typeParamScope = nestTypeParamScope(this.scopeManager, node);
-    }
     // set ArrayPattern/ObjectPattern visitor keys back to their original. otherwise
     // escope will traverse into them and include the identifiers within as declarations
     estraverses.forEach(function (estraverse) {
@@ -166,50 +130,6 @@ function monkeypatch() {
       estraverse.VisitorKeys.ObjectPattern = t.VISITOR_KEYS.ObjectPattern;
       estraverse.VisitorKeys.ArrayPattern = t.VISITOR_KEYS.ArrayPattern;
     });
-    if (typeParamScope) {
-      this.close(node);
-    }
-  };
-
-  function createScopeVariable (node, name) {
-    this.currentScope().variableScope.__define(name,
-      new Definition(
-        "Variable",
-        name,
-        node,
-        null,
-        null,
-        null
-      )
-    );
-  }
-
-  referencer.prototype.TypeAlias = function(node) {
-    createScopeVariable.call(this, node, node.id);
-    var typeParamScope;
-    if (node.typeParameters) {
-      typeParamScope = nestTypeParamScope(this.scopeManager, node);
-    }
-    if (typeParamScope) {
-      this.close(node);
-    }
-  };
-
-  referencer.prototype.DeclareModule =
-  referencer.prototype.DeclareFunction =
-  referencer.prototype.DeclareVariable =
-  referencer.prototype.DeclareClass = function(node) {
-    if (node.id) {
-      createScopeVariable.call(this, node, node.id);
-    }
-
-    var typeParamScope;
-    if (node.typeParameters) {
-      typeParamScope = nestTypeParamScope(this.scopeManager, node);
-    }
-    if (typeParamScope) {
-      this.close(node);
-    }
   };
 }
 
