@@ -5,11 +5,14 @@ var eslint = require("eslint");
 function verifyAndAssertMessages(code, rules, expectedMessages, sourceType, overrideConfig) {
   var config = {
     parser: require.resolve(".."),
-    rules: rules,
-    env: {
-      node: true,
-      es6: true
-    },
+    plugins: [
+      "flow-vars"
+    ],
+    envs: ["node", "es6"],
+    rules: Object.assign({
+      "flow-vars/define-flow-type": 2,
+      "flow-vars/use-flow-type": 2
+    }, rules),
     parserOptions: {
       ecmaVersion: 6,
       ecmaFeatures: {
@@ -18,16 +21,18 @@ function verifyAndAssertMessages(code, rules, expectedMessages, sourceType, over
         globalReturn: true
       },
       sourceType: sourceType
-    }
+    },
+    useEslintrc: false,
+    ignore: false
   };
 
   if (overrideConfig) {
-    for (var key in overrideConfig) {
-      config[key] = overrideConfig[key];
-    }
+    Object.assign(config, overrideConfig);
   }
 
-  var messages = eslint.linter.verify(code, config);
+  const engine = new eslint.CLIEngine(config);
+
+  var messages = engine.executeOnText(code).results[0].messages;
 
   if (messages.length !== expectedMessages.length) {
     throw new Error("Expected " + expectedMessages.length + " message(s), got " + messages.length + " " + JSON.stringify(messages));
