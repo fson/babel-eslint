@@ -6,12 +6,12 @@ function verifyAndAssertMessages(code, rules, expectedMessages, sourceType, over
   var config = {
     parser: require.resolve(".."),
     plugins: [
-      "flow-vars"
+      "flowtype"
     ],
     envs: ["node", "es6"],
     rules: Object.assign({
-      "flow-vars/define-flow-type": 1,
-      "flow-vars/use-flow-type": 1
+      "flowtype/define-flow-type": 1,
+      "flowtype/use-flow-type": 1
     }, rules),
     parserOptions: {
       ecmaVersion: 6,
@@ -189,6 +189,14 @@ describe("verify", function () {
     it("type alias", function () {
       verifyAndAssertMessages(
         "type SomeNewType = any;",
+        { "no-undef": 1 },
+        []
+      );
+    });
+
+    it("declare type alias", function () {
+      verifyAndAssertMessages(
+        "declare type SomeNewType = any;",
         { "no-undef": 1 },
         []
       );
@@ -685,7 +693,7 @@ describe("verify", function () {
           "var a: { id<Foo>(x: Foo2): Foo3; }; a;"
         ].join("\n"),
         { "no-unused-vars": 1, "no-undef": 1 },
-        []
+        [ "1:13 'Foo' is defined but never used. no-unused-vars" ]
       );
     });
 
@@ -858,7 +866,7 @@ describe("verify", function () {
           "var a: <Foo>(x: Foo2, ...y:Foo3[]) => Foo4; a;"
         ].join("\n"),
         { "no-unused-vars": 1, "no-undef": 1 },
-        []
+        [ "1:13 'Foo' is defined but never used. no-unused-vars"]
       );
     });
 
