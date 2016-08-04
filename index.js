@@ -52,6 +52,11 @@ function monkeypatch() {
   // monkeypatch estraverse
   estraverse = estraverseRelative.require("estraverse");
   estraverses.push(estraverse);
+
+  var estraverseOfEslint = eslintMod.require("estraverse");
+  estraverses.push(estraverseOfEslint);
+  Object.assign(estraverseOfEslint.VisitorKeys, t.VISITOR_KEYS);
+
   Object.assign(estraverse.VisitorKeys, t.VISITOR_KEYS);
 
   estraverses.forEach(function (estraverse) {

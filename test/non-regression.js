@@ -10,8 +10,8 @@ function verifyAndAssertMessages(code, rules, expectedMessages, sourceType, over
     ],
     envs: ["node", "es6"],
     rules: Object.assign({
-      "flow-vars/define-flow-type": 2,
-      "flow-vars/use-flow-type": 2
+      "flow-vars/define-flow-type": 1,
+      "flow-vars/use-flow-type": 1
     }, rules),
     parserOptions: {
       ecmaVersion: 6,
